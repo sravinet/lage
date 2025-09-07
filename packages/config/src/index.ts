@@ -4,6 +4,6 @@ export { getMaxWorkersPerTask, getMaxWorkersPerTaskFromOptions } from "./getMaxW
 export { readConfigFile } from "./readConfigFile.js";
 export type { PipelineDefinition } from "./types/PipelineDefinition.js";
 export type { ConfigOptions } from "./types/ConfigOptions.js";
-export type { CacheOptions } from "./types/CacheOptions.js";
+export type { CacheOptions, CloudflareR2CacheStorageConfig } from "./types/CacheOptions.js";
 export type { LoggerOptions } from "./types/LoggerOptions.js";
 export type { Priority } from "./types/Priority.js";

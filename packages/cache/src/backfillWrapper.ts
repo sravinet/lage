@@ -6,7 +6,7 @@ import * as os from "os";
 import { createDefaultConfig, getEnvConfig } from "backfill-config";
 import { makeLogger } from "backfill-logger";
 import type { Logger as BackfillLogger } from "backfill-logger";
-import type { CacheOptions } from "@lage-run/config";
+import type { CacheOptions, CloudflareR2CacheStorageConfig } from "@lage-run/config";
 import { CredentialCache } from "./CredentialCache.js";
 
 export function createBackfillLogger() {
@@ -40,6 +40,9 @@ export function createBackfillCacheConfig(cwd: string, cacheOptions: Partial<Cac
     if ("connectionString" in azureOptions && !isTokenConnectionString(azureOptions.connectionString)) {
       azureOptions.credential = CredentialCache.getInstance();
     }
+  } else if (mergedConfig.cacheStorageConfig.provider === "cloudflare-r2") {
+    // R2 configuration is handled directly by the R2CacheProvider
+    // No additional credential processing needed here
   }
 
   return mergedConfig;

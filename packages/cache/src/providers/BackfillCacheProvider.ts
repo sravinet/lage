@@ -4,12 +4,13 @@ import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
 import type { CacheProvider } from "../types/CacheProvider.js";
-import type { CacheOptions } from "@lage-run/config";
+import type { CacheOptions, CloudflareR2CacheStorageConfig } from "@lage-run/config";
 import type { Logger as BackfillLogger } from "backfill-logger";
 import type { Target } from "@lage-run/target-graph";
 import type { Logger } from "@lage-run/logger";
 import { getCacheDirectory, getCacheDirectoryRoot } from "../getCacheDirectory.js";
 import { chunkPromise } from "../chunkPromise.js";
+import { CloudflareR2CacheStorageWrapper } from "./CloudflareR2CacheStorageWrapper.js";
 
 const rm = promisify(fs.rm);
 const readdir = promisify(fs.readdir);
@@ -33,8 +34,18 @@ export class BackfillCacheProvider implements CacheProvider {
     const { cacheOptions } = this.options;
     const { cacheStorageConfig, incrementalCaching } = createBackfillCacheConfig(cwd, cacheOptions, this.backfillLogger);
 
-    const cachePath = this.getCachePath(cwd, hash);
+    // Handle Cloudflare R2 directly since it's not part of backfill
+    if (cacheStorageConfig?.provider === "cloudflare-r2") {
+      const r2Config = cacheStorageConfig as CloudflareR2CacheStorageConfig;
+      return new CloudflareR2CacheStorageWrapper(
+        r2Config,
+        cwd,
+        this.options.logger,
+        this.backfillLogger
+      );
+    }
 
+    const cachePath = this.getCachePath(cwd, hash);
     return getCacheStorageProvider(cacheStorageConfig ?? { provider: "local" }, cachePath, this.backfillLogger, cwd, incrementalCaching);
   }
 
@@ -77,7 +88,8 @@ export class BackfillCacheProvider implements CacheProvider {
     const cacheStorage = this.getTargetCacheStorageProvider(target.cwd, hash);
 
     try {
-      await cacheStorage.put(hash, target.outputs ?? this.options.cacheOptions.outputGlob ?? ["**/*"]);
+      const outputs = target.outputs ?? this.options.cacheOptions.outputGlob ?? ["**/*"];
+      await cacheStorage.put(hash, outputs);
     } catch (error) {
       let message;
 

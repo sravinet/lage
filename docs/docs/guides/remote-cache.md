@@ -6,9 +6,16 @@ title: Remote cache
 
 As your repo grows in size and complexity, the build takes longer and longer even locally. `lage` elegantly provides an incremental build capability given a locally available cache. When we pair the caching capability of `lage` with a cloud storage provider, we can speed up local builds with remote cache made available by Continuous Integration, or CI, jobs.
 
-The theory is that when the CI job runs, it'll produce a "last known good" cache to be uploaded in a cloud storage, like Azure Blob Storage. The remote cache has been made available both for build-over-build speed ups in future CI jobs, as well as the local first build scenario.
+The theory is that when the CI job runs, it'll produce a "last known good" cache to be uploaded in a cloud storage, like Azure Blob Storage or Cloudflare R2. The remote cache has been made available both for build-over-build speed ups in future CI jobs, as well as the local first build scenario.
 
 `lage` has a "fallback cache" mechanism. `lage` will look for cache in layers: first on disk, then on remote server. `lage` will fill the local cache with the remote one if there is a remote cache hit. Next, `lage` will save the locally built cache into the remote cache if the environment variable `LAGE_WRITE_REMOTE_CACHE` is set _and_ if the cache is not configured to use a local provider.
+
+## Remote Cache Providers
+
+`lage` supports multiple remote cache providers:
+
+- **[Azure Blob Storage](remote-cache.md#setting-up-remote-cache---azure-blob-storage)** - Microsoft's cloud storage service
+- **[Cloudflare R2](cloudflare-r2-cache.md)** - Cost-effective S3-compatible storage with zero egress fees
 
 ## Setting up remote cache - Azure Blob Storage
 
