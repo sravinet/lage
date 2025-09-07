@@ -1,3 +1,4 @@
+import { LRUCache } from "lru-cache";
 import type { CacheProvider } from "../types/CacheProvider.js";
 import type { Logger } from "@lage-run/logger";
 import type { Target } from "@lage-run/target-graph";
@@ -19,8 +20,14 @@ export interface RemoteFallbackCacheProviderOptions {
  * It will also automatically populate the local cache with the remote cache.
  */
 export class RemoteFallbackCacheProvider implements CacheProvider {
-  private static localHits: { [hash: string]: boolean } = {};
-  private static remoteHits: { [hash: string]: boolean } = {};
+  private static localHits = new LRUCache<string, boolean>({ 
+    max: 10000, // Limit to 10k entries to prevent memory leaks
+    ttl: 1000 * 60 * 60 // 1 hour TTL
+  });
+  private static remoteHits = new LRUCache<string, boolean>({ 
+    max: 10000, // Limit to 10k entries to prevent memory leaks
+    ttl: 1000 * 60 * 60 // 1 hour TTL
+  });
 
   constructor(private options: RemoteFallbackCacheProviderOptions) {}
 
@@ -28,24 +35,27 @@ export class RemoteFallbackCacheProvider implements CacheProvider {
     const { logger, remoteCacheProvider, localCacheProvider } = this.options;
 
     if (localCacheProvider) {
-      RemoteFallbackCacheProvider.localHits[hash] = await localCacheProvider.fetch(hash, target);
-      logger.silly(`local cache fetch: ${hash} ${RemoteFallbackCacheProvider.localHits[hash]}`);
+      const localHit = await localCacheProvider.fetch(hash, target);
+      RemoteFallbackCacheProvider.localHits.set(hash, localHit);
+      logger.silly(`local cache fetch: ${hash} ${localHit}`);
     }
 
-    if (!RemoteFallbackCacheProvider.localHits[hash] && remoteCacheProvider) {
-      RemoteFallbackCacheProvider.remoteHits[hash] = await remoteCacheProvider.fetch(hash, target);
-      logger.silly(`remote fallback fetch: ${hash} ${RemoteFallbackCacheProvider.remoteHits[hash]}`);
+    const localHit = RemoteFallbackCacheProvider.localHits.get(hash);
+    if (!localHit && remoteCacheProvider) {
+      const remoteHit = await remoteCacheProvider.fetch(hash, target);
+      RemoteFallbackCacheProvider.remoteHits.set(hash, remoteHit);
+      logger.silly(`remote fallback fetch: ${hash} ${remoteHit}`);
 
       // now save this into the localCacheProvider, if available
-      if (localCacheProvider && RemoteFallbackCacheProvider.remoteHits[hash]) {
+      if (localCacheProvider && remoteHit) {
         logger.silly(`local cache put, fetched cache from remote: ${hash}`);
         await localCacheProvider.put(hash, target);
       }
 
-      return RemoteFallbackCacheProvider.remoteHits[hash];
+      return remoteHit;
     }
 
-    return RemoteFallbackCacheProvider.localHits[hash];
+    return localHit || false;
   }
 
   async put(hash: string, target: Target) {
@@ -72,15 +82,19 @@ export class RemoteFallbackCacheProvider implements CacheProvider {
     await Promise.all(putPromises);
   }
 
-  private isRemoteHit(hash) {
-    return hash in RemoteFallbackCacheProvider.remoteHits && RemoteFallbackCacheProvider.remoteHits[hash];
+  private isRemoteHit(hash: string): boolean {
+    return RemoteFallbackCacheProvider.remoteHits.get(hash) || false;
   }
 
-  private isLocalHit(hash) {
-    return hash in RemoteFallbackCacheProvider.localHits && RemoteFallbackCacheProvider.localHits[hash];
+  private isLocalHit(hash: string): boolean {
+    return RemoteFallbackCacheProvider.localHits.get(hash) || false;
   }
 
   async clear(): Promise<void> {
+    // Clear the hit caches to prevent memory buildup
+    RemoteFallbackCacheProvider.localHits.clear();
+    RemoteFallbackCacheProvider.remoteHits.clear();
+    
     const { localCacheProvider } = this.options;
     if (localCacheProvider) {
       return localCacheProvider.clear();
